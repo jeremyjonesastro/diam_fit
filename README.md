@@ -12,7 +12,7 @@ Required Inputs
 * combiners - a beam combiner (or list of combiners) your data come from
 * nights - the night or list of nights your data come from
 
-*IMPORTANT NOTE - Your oifits files must be named in the following format to be recognized by diam_fit.py*
+**IMPORTANT NOTE - Your oifits files must be named in the following format to be recognized by diam_fit.py**
 
 STAR.COMBINER.NIGHT*.oifits
 
@@ -31,3 +31,13 @@ Optional Inputs
 * fix_ldcK - fix ldcK to ldcK_init (default = false)
 * fix_ldcH - fix ldcH to ldcH_init (default = false)
 * camp - fit closure amplitudes (default = false)
+
+**Example runs**
+
+Multistar:
+
+  python diam_fit.py --data_dir final_data_2023Dec --stars HD_27371 HD_27697 HD_28305 HD_28307 --diam_init 1.5 1.5 1.5 1.5 --ldcK_init 0.3 0.3 0.3 0.3 --ldcH_init 0.3 0.3 0.3 0.3 --combiners MIRCX MYSTIC --nights 2023Dec12 2023Dec13
+
+Single star:
+
+  python diam_fit.py --data_dir final_data_2023Dec --stars HD_27371 --diam_init 1.5 --ldcK_init 0.3 --ldcH_init 0.3 --combiners MIRCX MYSTIC --nights 2023Dec12 2023Dec13
