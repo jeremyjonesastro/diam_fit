@@ -45,4 +45,4 @@ Single star:
   python diam_fit.py --data_dir final_data_2023Dec --stars HD_27371 --diam_init 1.5 --ldcK_init 0.3 --ldcH_init 0.3 --combiners MIRCX MYSTIC --nights 2023Dec12 2023Dec13
 
 
-**ANOTHER IMPORTANT NOTE - You will need a list of time windows for your observations as part of the block-bootstrapping. This is not measured automatically. See MJD_cutoffs.csv as an example.**
+**ANOTHER IMPORTANT NOTE - You will need a list of time windows for your observations as part of the block-bootstrapping. This is not measured automatically. See MJD_cutoffs.csv as an example. This file must be in your data directory.**
