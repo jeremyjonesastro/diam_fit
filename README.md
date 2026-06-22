@@ -2,6 +2,8 @@
 Fits a diameter and limb-darkening coefficient to interferometric visibilities and/or closure amplitudes.
 Linear or power law limb darkening laws are both available. 
 When fitting to visibilities, fits a scaling factor for each night+combiner. Uncertainties calculated by a block-bootstrap method.
+The blocks are determined by combiner, baseline, and time. So, for example, three observations made with both mircx and mystic using all six CHARA telescopes would give 90 blocks and each block would be made up of N visibilities (where N is the number of wavelength channels for the observation).
+The bootstrapping algorithm selects a random set of blocks (with replacement). Each block within the selection has its visibility uniformly varied by a random gaussian value based on the average uncertainty of the block. The diameter is then fit to this random set. The uncertainty in the measured values is determined by running this algorithm many times (1000 times by default).
 
 Required Inputs
 * data_dir - the relative path to the directory with the reduced+calibrated oifits that you want to use are located
@@ -41,3 +43,6 @@ Multistar:
 Single star:
 
   python diam_fit.py --data_dir final_data_2023Dec --stars HD_27371 --diam_init 1.5 --ldcK_init 0.3 --ldcH_init 0.3 --combiners MIRCX MYSTIC --nights 2023Dec12 2023Dec13
+
+
+**ANOTHER IMPORTANT NOTE - You will need a list of time windows for your observations as part of the block-bootstrapping. This is not measured automatically. See MJD_cutoffs.csv as an example.**
