@@ -667,7 +667,7 @@ def fit_v2(v2df, law, diam_init, ldcK_init, ldcH_init, fix_ldcK, fix_ldcH,
             if law == 'linear':
                 return linear_ldd_func((sf, wl, v0_arr), diam, ldcK_init, ldcH_init)
             elif law == 'power':
-                return linear_ldd_func((sf, wl, v0_arr), diam, ldcK_init, ldcH_init)
+                return power_ldd_func((sf, wl, v0_arr), diam, ldcK_init, ldcH_init)
         p0     = [initial_guess[0]] + [1.0] * N_groups
         bounds = (
             [lower_bound[0]] + [v0_lim[0]] * N_groups,
