@@ -46,3 +46,6 @@ Single star:
 
 
 **ANOTHER IMPORTANT NOTE - You will need a list of time windows for your observations as part of the block-bootstrapping. This is not measured automatically. See MJD_cutoffs.csv as an example. This file must be in your data directory.**
+
+Closure Amplitudes:
+If you're using the --camp flag to fit a diameter using closure amplitudes, you will also need the level 1 data put out by the mircx/mystic calibration pipeline. Put them in your data directory in a directory labelled "l1_data". The diameter will be fit to the closure amplitudes calculated from the calibrated L2 data and separately from the uncalibrated L1 data.
