@@ -50,6 +50,7 @@ Optional Inputs
 --fix_ldcK - fix ldcK to ldcK_init (default = false)
 --fix_ldcH - fix ldcH to ldcH_init (default = false)
 --camp - fit closure amplitudes (default = false)
+--wlcorr - applies the wavelength corrections for MIRCX/MYSTIC (default = true) - uses pre-2025 values!
 
 """
 
@@ -73,6 +74,7 @@ def main():
     parser.add_argument('--fix_ldcK',action='store_true')
     parser.add_argument('--fix_ldcH',action='store_true')
     parser.add_argument('--camp',action='store_true')   #Closure amplitudes
+    parser.add_argument('--wlcorr',action='store_true',default=True)  #Applies the MIRCX/MYSTIC wavelength corrections
     
     args = parser.parse_args()
     
@@ -83,6 +85,9 @@ def main():
     save_dir = path / args.data_dir / 'results'  #Where the results are to be saved
     if not save_dir.exists():   #If results directory doesn't exist, make it
         save_dir.mkdir(parents=True)
+        
+    if args.wlcorr:
+        print('Correcting wavelengths using the MIRCX/MYSTIC corrections pre-2025')
     
     data_dir = path / args.data_dir  #Where the data are stored
     l1_data_dir = path / args.data_dir / 'l1_data'
@@ -96,7 +101,7 @@ def main():
             for j,fg in enumerate(file_groups):
                 note = notes[j]+'.'+args.law
                 
-                v2df = make_v2df(fg,data_dir)
+                v2df = make_v2df(fg,data_dir,args.wlcorr)
                 plot_sf = range(int(min(v2df['sf'])),int(max(v2df['sf'])),1)
                 popt, pcov, groups = fit_v2(v2df,args.law,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],args.fix_ldcK,args.fix_ldcH)
                 report_fit_results(v2df,args.law,popt,groups,save_dir,s,note)
@@ -111,7 +116,7 @@ def main():
                     except:
                         print('CA fit failed for {}'.format(star))
                         
-                    l1_v2df = make_v2df(l1_file_groups[j],data_dir)
+                    l1_v2df = make_v2df(l1_file_groups[j],data_dir,args.wlcorr)
                     l1_cadf = make_cadf(l1_v2df)
                     try:
                         cal1popt = fit_ca(l1_cadf,args.law,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],args.fix_ldcK,args.fix_ldcH,maxiter=100000)
@@ -323,7 +328,9 @@ def get_scopes_for_ca(bls):
     N = len(uni_scopes)
     return uni_scopes,N
 
-def make_df_from_data(data,wl,dwl,scopes,mjd_cutoff):
+def make_df_from_data(data,wl,dwl,scopes,mjd_cutoff,wlcorr):
+    if wlcorr:
+        wl = correct_wl(wl)
     df = pd.DataFrame(columns=['V2','V2err','u_m','v_m','wl','dwl','u_wl','v_wl','sf','bl','MJD','night','obs','bl_obs'])
     df['V2'] = data[4]
     df['V2err'] = data[5]
@@ -345,6 +352,22 @@ def make_df_from_data(data,wl,dwl,scopes,mjd_cutoff):
     df['bl_obs'] = df[['bl','obs']].agg(' '.join, axis=1)
     
     return df
+
+def correct_wl(wl_list):
+    '''
+    Input - wl_list, list of wavelengths
+    Output - list of wavelengths, corrected using the MIRCX/MYSTIC wavelength corrections
+    '''
+    MIRCX_wlcorr = 1.0054
+    MYSTIC_wlcorr = 1.0067
+    
+    corrected_wl = []
+    for wl in wl_list:
+        if wl < 1.85:
+            corrected_wl.append(wl/MIRCX_wlcorr)
+        else:
+            corrected_wl.append(wl/MYSTIC_wlcorr)
+    return corrected_wl
 
 def get_obs(mjd_slice,mjd_cutoff):
     #Makes a slice that gives the observation number based on the MJD and cutoffs
@@ -578,7 +601,7 @@ def select_files(scenario,data_dir,star,nights,combiners):
     
     return file_groups,notes
 
-def make_v2df(files,data_dir):
+def make_v2df(files,data_dir,wlcorr):
     #makes the pandas dataframe with all the V2 data based on the given files
     v2df = pd.DataFrame(columns=['V2','V2err','u_m','v_m','wl','dwl','u_wl','v_wl','sf','bl','MJD','night','obs','bl_obs','combiner'])
     mjd_cutoffs = pd.read_csv(data_dir / 'MJD_cutoffs.csv')
@@ -594,7 +617,7 @@ def make_v2df(files,data_dir):
                 dwl.append(wl_dwl[1])
             scopes = get_scopes(data['OI_ARRAY'].data)
             for this_data in data['OI_VIS2'].data:
-                this_df = make_df_from_data(this_data,wl,dwl,scopes,this_mjd_cutoff)
+                this_df = make_df_from_data(this_data,wl,dwl,scopes,this_mjd_cutoff,wlcorr)
                 if len(this_df) == 0:
                     continue
                 this_df['combiner'] = combiner   # tag each row with its instrument
@@ -900,6 +923,9 @@ def do_bootstrap_by_obs(v2df, law, save_dir, scenario, note, diam_init, ldcK_ini
     bf_popt and groups come from the initial fit_v2() call and define the
     best-fit parameters and (combiner, obs) group ordering used throughout.
     """
+    ms = 0.6  #Marker size for plotting
+    elw = 0.2  #line width of the errorbar for plotting
+    
     star = note.split('.')[0]
     N_groups = len(groups)
     v2_results = []
@@ -1007,6 +1033,7 @@ def do_bootstrap_by_obs(v2df, law, save_dir, scenario, note, diam_init, ldcK_ini
     #Get the group index
     _, group_index = make_group_index(v2df)
     #Plot the data after it has been scaled by the best-fit scaling factor for the relevant group
+    combiners_plotted = []
     for g, (combiner, night) in enumerate(groups):
         mask = (group_index == g)
         sf_g  = np.array(v2df['sf'])[mask]
@@ -1018,7 +1045,12 @@ def do_bootstrap_by_obs(v2df, law, save_dir, scenario, note, diam_init, ldcK_ini
             bc_col = 'r'
         else:
             bc_col = 'k'
-        plots['V2'][1].errorbar(sf_g,v2_g/bf_v0s[g],yerr=v2e_g,fmt='.',color=bc_col, zorder=1)
+        if combiner not in combiners_plotted:
+            combiners_plotted.append(combiner)
+            label = combiner
+        else:
+            label = None
+        plots['V2'][1].errorbar(sf_g,v2_g/bf_v0s[g],yerr=v2e_g,fmt='.',color=bc_col, zorder=1, markersize=ms,elinewidth=elw, label=label)
     # Plot a visibility curve with the best fitting diameter and LDCs using a scaling factor of 1
     #   because the data are scaled
     plot_wl = 2.2e-6
@@ -1045,8 +1077,8 @@ def do_bootstrap_by_obs(v2df, law, save_dir, scenario, note, diam_init, ldcK_ini
         mystic_lnCA = cadf['lnCA'][mystic_mask]
         mystic_lnCAerr = cadf['lnCAerr'][mystic_mask]
         #plots['CA'][1].errorbar(cadf['sfmax'],cadf['lnCA'],yerr=cadf['lnCAerr'],fmt='k.', zorder = 1)
-        plots['CA'][1].errorbar(mircx_sfmax,mircx_lnCA,yerr=mircx_lnCAerr,fmt='b.', zorder = 1)
-        plots['CA'][1].errorbar(mystic_sfmax,mystic_lnCA,yerr=mystic_lnCAerr,fmt='r.', zorder = 1)
+        plots['CA'][1].errorbar(mircx_sfmax,mircx_lnCA,yerr=mircx_lnCAerr,fmt='b.', zorder = 1, markersize=ms,elinewidth=elw)
+        plots['CA'][1].errorbar(mystic_sfmax,mystic_lnCA,yerr=mystic_lnCAerr,fmt='r.', zorder = 1, markersize=ms,elinewidth=elw)
         if law == 'linear':
             y_plot = linear_ldd_ca_func(cadf['sflist'],cadf['wl'], *capopt)
         elif law == 'power':
@@ -1068,8 +1100,8 @@ def do_bootstrap_by_obs(v2df, law, save_dir, scenario, note, diam_init, ldcK_ini
         mystic_lnCA = l1_cadf['lnCA'][mystic_mask]
         mystic_lnCAerr = l1_cadf['lnCAerr'][mystic_mask]
         #plots['CAL1'][1].errorbar(l1_cadf['sfmax'],l1_cadf['lnCA'],yerr=l1_cadf['lnCAerr'],fmt='k.', zorder = 1)
-        plots['CAL1'][1].errorbar(mircx_sfmax,mircx_lnCA,yerr=mircx_lnCAerr,fmt='b.', zorder = 1)
-        plots['CAL1'][1].errorbar(mystic_sfmax,mystic_lnCA,yerr=mystic_lnCAerr,fmt='r.', zorder = 1)
+        plots['CAL1'][1].errorbar(mircx_sfmax,mircx_lnCA,yerr=mircx_lnCAerr,fmt='b.', zorder = 1, markersize=ms,elinewidth=elw)
+        plots['CAL1'][1].errorbar(mystic_sfmax,mystic_lnCA,yerr=mystic_lnCAerr,fmt='r.', zorder = 1, markersize=ms,elinewidth=elw)
         if law == 'linear':
             y_plot = linear_ldd_ca_func(l1_cadf['sflist'],l1_cadf['wl'], *cal1popt)
         elif law == 'power':
