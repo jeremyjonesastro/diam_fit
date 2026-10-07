@@ -75,6 +75,7 @@ def main():
     parser.add_argument('--fix_ldcH',action='store_true')
     parser.add_argument('--camp',action='store_true')   #Closure amplitudes
     parser.add_argument('--wlcorr',action='store_true',default=True)  #Applies the MIRCX/MYSTIC wavelength corrections
+    parser.add_argument('--noV2',action='store_true')   #Won't run initial V^2 fit
     
     args = parser.parse_args()
     
@@ -102,19 +103,23 @@ def main():
                 note = notes[j]+'.'+args.law
                 
                 v2df = make_v2df(fg,data_dir,args.wlcorr)
-                plot_sf = range(int(min(v2df['sf'])),int(max(v2df['sf'])),1)
-                popt, pcov, groups = fit_v2(v2df,args.law,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],args.fix_ldcK,args.fix_ldcH)
-                report_fit_results(v2df,args.law,popt,groups,save_dir,s,note)
+                
+                if args.noV2:
+                    print('Not fitting initial V^2 fit')
+                else:
+                    plot_sf = range(int(min(v2df['sf'])),int(max(v2df['sf'])),1)
+                    popt, pcov, groups = fit_v2(v2df,args.law,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],args.fix_ldcK,args.fix_ldcH)
+                    report_fit_results(v2df,args.law,popt,groups,save_dir,s,note)
                 
                 
                 if args.camp:
                     cadf = make_cadf(v2df)
                     
-                    try:
-                        capopt = fit_ca(cadf,args.law,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],args.fix_ldcK,args.fix_ldcH,maxiter=100000)
-                        report_ca_fit_results(cadf,args.law,capopt,save_dir,s,note)
-                    except:
-                        print('CA fit failed for {}'.format(star))
+                    #try:
+                    capopt = fit_ca(cadf,args.law,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],args.fix_ldcK,args.fix_ldcH,maxiter=100000)
+                    report_ca_fit_results(cadf,args.law,capopt,save_dir,s,note)
+                    #except:
+                    #    print('CA fit failed for {}'.format(star))
                         
                     l1_v2df = make_v2df(l1_file_groups[j],data_dir,args.wlcorr)
                     l1_cadf = make_cadf(l1_v2df)
@@ -124,9 +129,15 @@ def main():
                     except:
                         print('L1 CA fit failed for {}'.format(star))
                     
-                    do_bootstrap_by_obs(v2df,args.law,save_dir,s,note,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],popt,groups,args.boot_N,plot_sf,args.fix_ldcK,args.fix_ldcH,ca=True,capopt=capopt,cal1popt=cal1popt,cadf=cadf,l1_v2df=l1_v2df,l1_cadf=l1_cadf)
+                    if args.boot_N > 0:
+                        do_bootstrap_by_obs(v2df,args.law,save_dir,s,note,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],popt,groups,args.boot_N,plot_sf,args.fix_ldcK,args.fix_ldcH,ca=True,capopt=capopt,cal1popt=cal1popt,cadf=cadf,l1_v2df=l1_v2df,l1_cadf=l1_cadf)
+                    else:
+                        print('No bootstrap')
                 else:
-                    do_bootstrap_by_obs(v2df,args.law,save_dir,s,note,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],popt,groups,args.boot_N,plot_sf,args.fix_ldcK,args.fix_ldcH)
+                    if args.boot_N > 0:
+                        do_bootstrap_by_obs(v2df,args.law,save_dir,s,note,args.diam_init[i],args.ldcK_init[i],args.ldcH_init[i],popt,groups,args.boot_N,plot_sf,args.fix_ldcK,args.fix_ldcH)
+                    else:
+                        print('No bootstrap')
 
 def make_cadf(v2df):
     #Makes a dataframe of closure amplitudes based on the V^2
@@ -751,7 +762,8 @@ def fit_v2(v2df, law, diam_init, ldcK_init, ldcH_init, fix_ldcK, fix_ldcH,
     return popt, pcov, groups
 
 def fit_ca(cadf,law,diam_init,ldcK_init,ldcH_init,fix_ldcK,fix_ldcH,x=None,y=None,yerr=None,maxiter=5000):
-    diam_lim = [diam_init/2,diam_init*2]
+    #diam_lim = [diam_init/2,diam_init*2]
+    diam_lim = [diam_init,diam_init]
     ldcK_lim = [ldcK_init/5,ldcK_init*5]
     ldcH_lim = [ldcH_init/5,ldcH_init*5]
     
@@ -901,9 +913,10 @@ def report_ca_fit_results(cadf,law,popt,save_dir,scenario,note):
         quad_cadf = cadf[cadf.quad == quad]
         if law == 'linear':
             plt.plot(quad_cadf['sfmax'],linear_ldd_ca_func(quad_cadf['sflist'], quad_cadf['wl'], *popt), 'g.', zorder=3)
-        elif law == 'linear':
+        elif law == 'power':
             plt.plot(quad_cadf['sfmax'],power_ldd_ca_func(quad_cadf['sflist'], quad_cadf['wl'], *popt), 'g.', zorder=3)
         plt.errorbar(quad_cadf['sfmax'],quad_cadf['lnCA'],yerr=quad_cadf['lnCAerr'],fmt='k.')
+        lnCA_mod = power_ldd_ca_func(quad_cadf['sflist'], quad_cadf['wl'], *popt)
         plt.ylim([-15,15])
         plt.title(quad)
         plt.xlabel('Max Spatial Frequency in Quadrangle (Mλ)')
@@ -1226,7 +1239,7 @@ def do_bootstrap_by_obs(v2df, law, save_dir, scenario, note, diam_init, ldcK_ini
         ca_ldcK_median = stat.median(ca_ldcKs)
         ca_ldcK_stdev  = stat.stdev(ca_ldcKs)
         ca_ldcH_median = stat.median(ca_ldcHs)
-        ca_ldcH_stdev  = stat.stdev(ca_ldcKs)
+        ca_ldcH_stdev  = stat.stdev(ca_ldcHs)
         ca_report  = 'CA Bootstrap results\n'
         ca_report += '----------------------------------\n'
         ca_report += 'Diam (mas)      | LDC_K | LDC_H \n'
